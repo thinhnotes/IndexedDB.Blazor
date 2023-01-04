@@ -82,6 +82,7 @@ namespace IndexedDB.Blazor
                 // Find pk here to reduce required save time if more than one row has been deleted 
                 PropertyInfo pkProperty = null;
 
+                IList<IndexedEntity> rowAddeds = new List<IndexedEntity>();
                 foreach (var row in indexedSet.GetType().GetMethod("GetChanged", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(indexedSet, null) as IEnumerable<IndexedEntity>)
                 {
                     Debug.WriteLine($"Saving row");
@@ -91,7 +92,7 @@ namespace IndexedDB.Blazor
                         case EntityState.Unchanged:
                             continue;
                         case EntityState.Added:
-                            await this.AddRow(table.Name, row.Instance);
+                            rowAddeds.Add(row);
                             break;
                         case EntityState.Deleted:
                             if (pkProperty == null)
@@ -109,6 +110,8 @@ namespace IndexedDB.Blazor
                     }
                     Debug.WriteLine($"Row saved");
                 }
+
+                await this.AddMutipleRow(table.Name, rowAddeds.Select(x=>x.Instance));
             }
 
             Debug.WriteLine($"All changes saved");
@@ -334,6 +337,32 @@ namespace IndexedDB.Blazor
             var storeRecord = this.ConvertToObjectRecord(storeName, data);
 
             await this.connector.AddRecord<object>(storeRecord);
+
+            // TODO: OLD GENERIC IMPLEMENTATION / REMOVE
+            //Type[] typeArgs = { data.GetType() };
+            //var storeRecordType = typeof(StoreRecord<>).MakeGenericType(typeArgs);
+            //var storeRecord = Activator.CreateInstance(storeRecordType);
+
+            //storeRecordType.GetProperty("Data").SetValue(storeRecord, data);
+            //storeRecordType.GetProperty("Storename").SetValue(storeRecord, storeName);
+
+            //MethodInfo method = this.connector.GetType().GetMethod(nameof(this.connector.AddRecord));
+            //MethodInfo generic = method.MakeGenericMethod(data.GetType());
+
+            //await generic.InvokeAsync(this.connector, new object[] { storeRecord });
+        }
+
+        /// <summary>
+        /// Adds a row to the store
+        /// </summary>
+        /// <param name="storeName"></param>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        private async Task AddMutipleRow(string storeName, IEnumerable<object> datas)
+        {
+            var storeRecords = datas.Select(data => this.ConvertToObjectRecord(storeName, data)).ToList();
+
+            await this.connector.AddMutipleRecord<object>(storeRecords);
 
             // TODO: OLD GENERIC IMPLEMENTATION / REMOVE
             //Type[] typeArgs = { data.GetType() };
